@@ -12,7 +12,7 @@ endif()
 project ("BTree")
 
 # Add source to this project's executable.
-add_executable (BTree "BTree.cpp" "BTree.h")
+add_executable (BTree "Main.cpp" "Main.h" "BTree.h" "BTree.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET BTree PROPERTY CXX_STANDARD 20)
