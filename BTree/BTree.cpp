@@ -3,8 +3,15 @@
 #include <iostream>
 #include <algorithm>
 #include <string>
+#include <cassert>
 
-BTree::BTree(int maxElementsPerNode) : maxElementsPerNode(maxElementsPerNode), order(maxElementsPerNode + 1), height(0) {}
+BTree::BTree(int maxElementsPerNode) :
+	maxElementsPerNode(maxElementsPerNode),
+	minElementsPerNode(maxElementsPerNode / 2),
+	order(maxElementsPerNode + 1),
+	height(0)
+{
+}
 
 BTree::~BTree()
 {
@@ -31,7 +38,7 @@ BTreeNode* BTree::_insert(BTreeNode* node, Element* element)
 		node->insertElement(element);
 
 		if (node->elements.size() > maxElementsPerNode) {
-			int median = node->elements.size() / 2 - 1;
+			int median = node->elements.size() / 2;
 
 			BTreeNode* a = node->split(0, median);
 			BTreeNode* b = node->split(median + 1, node->elements.size());
@@ -90,7 +97,7 @@ BTreeNode* BTree::_insert(BTreeNode* node, Element* element)
 	}
 
 	if (node->elements.size() > maxElementsPerNode) {
-		int median = node->elements.size() / 2 - 1;
+		int median = node->elements.size() / 2;
 
 		BTreeNode* a = node->split(0, median);
 		BTreeNode* b = node->split(median + 1, node->elements.size());
@@ -115,10 +122,141 @@ BTreeNode* BTree::_insert(BTreeNode* node, Element* element)
 	return nullptr;
 }
 
-
-
 void BTree::remove(int key)
 {
+	_remove(root, key);
+}
+
+// https://www.cs.rhodes.edu/~kirlinp/courses/db/f16/handouts/btrees-deletion.pdf
+void BTree::_remove(BTreeNode* node, int key)
+{
+	if (node->isLeaf) {
+		for (int i = 0; i < node->elements.size(); i++) {
+			if (node->elements[i]->key == key) {
+				delete node->elements[i];
+				node->elements.erase(node->elements.begin() + i);
+				return;
+			}
+		}
+
+		return;
+	}
+
+	bool found = false;
+	int childIdx = 0;
+	for (int i = 0; i <= node->elements.size(); i++) {
+		if (i == node->elements.size()) {
+			childIdx = i;
+			break;
+		}
+
+		if (key < node->elements[i]->key) {
+			childIdx = i;
+			break;
+		}
+
+		if (key == node->elements[i]->key) {
+			node->elements.erase(node->elements.begin() + i);
+			found = true;
+			childIdx = i;
+			break;
+		}
+	}
+
+	if (found) {
+		BTreeNode* leftSubtree = node->children[childIdx];
+
+		if (leftSubtree == nullptr) {
+			return;
+		}
+
+		if (leftSubtree->elements.empty()) {
+			return;
+		}
+
+		node->elements.insert(node->elements.begin() + childIdx, leftSubtree->elements[leftSubtree->elements.size() - 1]);
+		leftSubtree->elements.pop_back();
+
+		if (leftSubtree->elements.size() < minElementsPerNode) {
+			int separatorIdx = childIdx;
+
+			_rebalance(leftSubtree, node, separatorIdx);
+		}
+	}
+	else {
+		BTreeNode* childNode = node->children[childIdx];
+		_remove(childNode, key);
+
+		if (childNode->elements.size() < minElementsPerNode) {
+			int separatorIdx = childIdx;
+
+			_rebalance(childNode, node, separatorIdx);
+		}
+	}
+}
+
+void BTree::_rebalance(BTreeNode* node, BTreeNode* parentNode, int separatorIdx)
+{
+	BTreeNode* leftSiblingNode = nullptr;
+	BTreeNode* rightSiblingNode = nullptr;
+
+	if (separatorIdx + 1 < parentNode->children.size()) {
+		if (parentNode->children[separatorIdx + 1] != nullptr) {
+			rightSiblingNode = parentNode->children[separatorIdx + 1];
+		}
+	}
+
+	if (separatorIdx - 1 > 0) {
+		if (parentNode->children[separatorIdx - 1] != nullptr) {
+			leftSiblingNode = parentNode->children[separatorIdx - 1];
+		}
+	}
+
+	if (rightSiblingNode && rightSiblingNode->elements.size() > minElementsPerNode) {
+		node->elements.push_back(parentNode->elements[separatorIdx]);
+		node->elements[separatorIdx] = rightSiblingNode->elements[0];
+		rightSiblingNode->elements.erase(rightSiblingNode->elements.begin());
+	}
+	else if (leftSiblingNode && leftSiblingNode->elements.size() > minElementsPerNode) {
+		node->elements.insert(node->elements.begin(), parentNode->elements[separatorIdx]);
+		node->elements[separatorIdx] = leftSiblingNode->elements[leftSiblingNode->elements.size() - 1];
+		leftSiblingNode->elements.pop_back();
+	}
+	else {
+		BTreeNode* leftNode;
+		BTreeNode* rightNode;
+
+		if (rightSiblingNode) {
+			leftNode = node;
+			rightNode = rightSiblingNode;
+		}
+		else {
+			leftNode = leftSiblingNode;
+			rightNode = node;
+		}
+
+		assert(leftNode != nullptr && rightNode != nullptr && "Left node and right node can not be null");
+
+		leftNode->elements.push_back(parentNode->elements[separatorIdx]);
+
+		for (Element* element : rightNode->elements) {
+			leftNode->elements.push_back(element);
+		}
+
+		parentNode->elements.erase(parentNode->elements.begin() + separatorIdx);
+		parentNode->children.erase(parentNode->children.begin() + separatorIdx);
+
+		if (parentNode == root && parentNode->elements.empty()) {
+			delete root;
+			root = leftNode;
+
+			if (root->children.empty()) {
+				root->isLeaf = true;
+			}
+
+			height--;
+		}
+	}
 }
 
 void BTree::find(int key)
@@ -175,9 +313,6 @@ BTreeNode::BTreeNode() : isLeaf(false)
 
 BTreeNode::~BTreeNode()
 {
-	//for (BTreeNode* c : children) {
-	//	delete c;
-	//}
 }
 
 int BTreeNode::insertElement(Element* element)

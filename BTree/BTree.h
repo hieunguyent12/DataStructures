@@ -28,7 +28,7 @@ public:
 	~BTreeNode();
 
 	bool isLeaf;
-	// Each node has at least ceil(order/2) - 1 keys (or elements)
+	// Each node has at least ceil(order/2) - 1 elements or (order-1)/2
 	vector<Element*> elements;
 
 	// Every non-leaf node (except root) has at least ceil(order/2) children
@@ -44,12 +44,14 @@ private:
 	BTreeNode* root = nullptr;
 
 	BTreeNode* _insert(BTreeNode* node, Element* element);
+	void _remove(BTreeNode* node, int key);
+	void _rebalance(BTreeNode* node, BTreeNode* parentNode, int separatorIdx);
 	void _print(std::vector<BTreeNode*> nodes, int height);
 public:
 	// The number of children each node can have (which is one more than the maximum number of keys per node)
 	int order;
-	// The maximum number of keys per node
 	int maxElementsPerNode;
+	int minElementsPerNode;
 	int height;
 
 	BTree(int maxElementsPerNode = 3);
@@ -57,6 +59,7 @@ public:
 
 	// https://en.wikipedia.org/wiki/B-tree#Insertion
 	void insert(int key, int value);
+	// https://en.wikipedia.org/wiki/B-tree#Deletion
 	void remove(int key);
 	void find(int key);
 	void print();
